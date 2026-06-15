@@ -2,13 +2,15 @@
 
 // 应用主逻辑（从 index.html 提取）
 (function() {
-  // 全局错误追踪
+  // 全局错误追踪（最多报告 5 次，避免刷屏）
+  var errorCount = 0;
   window.onerror = function(msg, url, ln) {
+    if (errorCount >= 5) return;
     msg = msg.toString();
     if (msg === 'Script error.' && url === '' && ln === 0) return;
+    errorCount++;
     console.error('[KoalasToTheMax]', msg, 'in', url, '@', ln);
     track('OnError', "'" + msg + "' in '" + url + "' @ " + ln);
-    window.onerror = function() {};
   };
 
   // 环境检测
@@ -100,6 +102,7 @@
     var parse = parseUrl(location);
     if (!parse) return;
     var file = parse.file;
+    // shownFile 是全局变量（声明在 tracking.js），用于跟踪当前加载的图片来源
     shownFile = parse.shownFile;
 
     if (parse.background) {
@@ -158,7 +161,7 @@
         }, 750);
       }
       if (colorData) {
-        koala.makeCircles("#dots", colorData, onEvent);
+        koala._control = koala.makeCircles("#dots", colorData, onEvent);
         track('GoodLoad', 'Yay');
       }
     };

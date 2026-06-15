@@ -7,23 +7,10 @@
 * For me on GitHub:  https://github.com/vogievetsky/KoalasToTheMax
 * License: MIT  [ http://koalastothemax.com/LICENSE ]
 *
-* If you are reading this then I have an easter egg for you:
-* You can use your own custom image as the source, simply type in:
-* http://koalastothemax.com?<your image url>
-* e.g.
-* http://koalastothemax.com?http://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/Flag_of_the_United_Kingdom.svg/200px-Flag_of_the_United_Kingdom.svg.png
-*
-* also if you want to use a custom image and want people to guess what it is
-* (without seeing the url) then you can type the url in base64 encoding like so:
-* http://koalastothemax.com?<your image url in base64>
-* e.g.
-* http://koalastothemax.com?YXN0bGV5LmpwZw==
-* (try to guess the image above)
+* Easter egg: use your own image via ?<image_url> or ?<base64_url>
 */
 
-var koala = {
-  version: '1.8.2'
-};
+var koala = { version: '1.8.2' };
 
 (function() {
   function array2d(w, h) {
@@ -31,10 +18,8 @@ var koala = {
     return function(x, y, v) {
       if (x < 0 || y < 0) return void 0;
       if (arguments.length === 3) {
-        // set
         return a[w * x + y] = v;
       } else if (arguments.length === 2) {
-        // get
         return a[w * x + y];
       } else {
         throw new TypeError("Bad number of arguments");
@@ -42,7 +27,6 @@ var koala = {
     }
   }
 
-  // Find the color average of 4 colors in the RGB colorspace
   function avgColor(x, y, z, w) {
     return [
       (x[0] + y[0] + z[0] + w[0]) / 4,
@@ -85,14 +69,10 @@ var koala = {
   }
 
   Circle.prototype.checkIntersection = function(sx, sy, ex, ey) {
-    var edx = this.x - ex,
-        edy = this.y - ey,
-        sdx = this.x - sx,
-        sdy = this.y - sy,
+    var edx = this.x - ex, edy = this.y - ey,
+        sdx = this.x - sx, sdy = this.y - sy,
         r2  = this.size / 2;
-
     r2 = r2 * r2; // Radius squared
-
     // End point is inside the circle and start point is outside
     return edx * edx + edy * edy <= r2 && sdx * sdx + sdy * sdy > r2;
   }
@@ -100,29 +80,22 @@ var koala = {
   Circle.addToVis = function(vis, circles, init) {
     var circle = vis.selectAll('.nope').data(circles)
       .enter().append('circle');
-
     if (init) {
-      // Setup the initial state of the initial circle
       circle = circle
-        .attr('cx',   function(d) { return d.x; })
-        .attr('cy',   function(d) { return d.y; })
+        .attr('cx', function(d) { return d.x; })
+        .attr('cy', function(d) { return d.y; })
         .attr('r', 4)
         .attr('fill', '#ffffff')
-          .transition()
-          .duration(1000);
+          .transition().duration(1000);
     } else {
-      // Setup the initial state of the opened circles
       circle = circle
         .attr('cx',   function(d) { return d.parent.x; })
         .attr('cy',   function(d) { return d.parent.y; })
         .attr('r',    function(d) { return d.parent.size / 2; })
         .attr('fill', function(d) { return String(d.parent.rgb); })
         .attr('fill-opacity', 0.68)
-          .transition()
-          .duration(300);
+          .transition().duration(300);
     }
-
-    // Transition the to the respective final state
     circle
       .attr('cx',   function(d) { return d.x; })
       .attr('cy',   function(d) { return d.y; })
@@ -132,40 +105,28 @@ var koala = {
       .each('end',  function(d) { d.node = this; });
   }
 
-  // Main code
-  var vis,
-      maxSize = 512,
-      minSize = 4,
-      dim = maxSize / minSize;
+  var vis, maxSize = 512, minSize = 4, dim = maxSize / minSize;
 
   koala.loadImage = function(imageData) {
-    // Create a canvas for image data resizing and extraction
     var canvas = document.createElement('canvas').getContext('2d');
-    // Draw the image into the corner, resizing it to dim x dim
     canvas.drawImage(imageData, 0, 0, dim, dim);
-    // Extract the pixel data from the same area of canvas
-    // Note: This call will throw a security exception if imageData
-    // was loaded from a different domain than the script.
     return canvas.getImageData(0, 0, dim, dim).data;
   };
 
   koala.makeCircles = function(selector, colorData, onEvent) {
     onEvent = onEvent || function() {};
-
     var splitableByLayer = [],
         splitableRemaining = 0,
         splitableTotal = 0,
         nextPercent = 0;
 
     function onSplit(circle) {
-      // manage events
       var layer = circle.layer;
       splitableByLayer[layer]--;
       splitableRemaining--;
       if (splitableByLayer[layer] === 0) {
         onEvent('LayerClear', layer);
       }
-
       var percent = 1 - splitableRemaining / splitableTotal;
       if (percent >= nextPercent) {
         onEvent('PercentClear', Math.round(nextPercent * 100));
@@ -173,25 +134,19 @@ var koala = {
       }
     }
 
-    // Make sure that the SVG exists and is empty
+    // 创建或清空 SVG
     if (!vis) {
-      // Create the SVG ellement
-      vis = d3.select(selector)
-        .append("svg")
-          .attr("width", maxSize)
-          .attr("height", maxSize)
-          .attr("viewBox", "0 0 " + maxSize + " " + maxSize)
-          .attr("preserveAspectRatio", "xMidYMid meet");
+      vis = d3.select(selector).append("svg")
+        .attr("width", maxSize).attr("height", maxSize)
+        .attr("viewBox", "0 0 " + maxSize + " " + maxSize)
+        .attr("preserveAspectRatio", "xMidYMid meet");
     } else {
-      vis.selectAll('circle')
-        .remove();
+      vis.selectAll('circle').remove();
     }
 
-    // Got the data now build the tree
+    // 构建四叉树
     var finestLayer = array2d(dim, dim);
     var size = minSize;
-
-    // Start off by populating the base (leaf) layer
     var xi, yi, t = 0, color;
     for (yi = 0; yi < dim; yi++) {
       for (xi = 0; xi < dim; xi++) {
@@ -201,7 +156,6 @@ var koala = {
       }
     }
 
-    // Build up successive nodes by grouping
     var layer, prevLayer = finestLayer;
     var c1, c2, c3, c4, currentLayer = 0;
     while (size < maxSize) {
@@ -210,9 +164,9 @@ var koala = {
       layer = array2d(dim, dim);
       for (yi = 0; yi < dim; yi++) {
         for (xi = 0; xi < dim; xi++) {
-          c1 = prevLayer(2 * xi    , 2 * yi    );
-          c2 = prevLayer(2 * xi + 1, 2 * yi    );
-          c3 = prevLayer(2 * xi    , 2 * yi + 1);
+          c1 = prevLayer(2 * xi,     2 * yi);
+          c2 = prevLayer(2 * xi + 1, 2 * yi);
+          c3 = prevLayer(2 * xi,     2 * yi + 1);
           c4 = prevLayer(2 * xi + 1, 2 * yi + 1);
           color = avgColor(c1.color, c2.color, c3.color, c4.color);
           c1.parent = c2.parent = c3.parent = c4.parent = layer(xi, yi,
@@ -226,11 +180,9 @@ var koala = {
       prevLayer = layer;
     }
     splitableRemaining = splitableTotal;
-
-    // Create the initial circle
     Circle.addToVis(vis, [layer(0, 0)], true);
 
-    // Interaction helper functions
+    // 交互辅助函数
     function splitableCircleAt(x, y) {
       var xi = Math.floor(x / minSize),
           yi = Math.floor(y / minSize),
@@ -247,10 +199,8 @@ var koala = {
           numSplits = Math.max(Math.ceil(length / 4), 1),
           stepX = dx / numSplits,
           stepY = dy / numSplits,
-          spX = startPoint[0],
-          spY = startPoint[1],
+          spX = startPoint[0], spY = startPoint[1],
           epX, epY;
-
       for (var i = 0; i < numSplits; i++) {
         epX = spX + stepX;
         epY = spY + stepY;
@@ -263,17 +213,11 @@ var koala = {
       }
     }
 
-    // Handle mouse events
+    // 鼠标事件
     var prevMousePosition = null;
     function onMouseMove() {
       var mousePosition = d3.mouse(vis.node());
-
-      // Do nothing if the mouse point is not valid
-      if (isNaN(mousePosition[0])) {
-        prevMousePosition = null;
-        return;
-      }
-
+      if (isNaN(mousePosition[0])) { prevMousePosition = null; return; }
       if (prevMousePosition) {
         findAndSplit(prevMousePosition, mousePosition);
       }
@@ -281,7 +225,7 @@ var koala = {
       d3.event.preventDefault();
     }
 
-    // Handle touch events
+    // 触摸事件
     var prevTouchPositions = {};
     function onTouchMove() {
       var touchPositions = d3.touches(vis.node());
@@ -305,40 +249,24 @@ var koala = {
       d3.event.preventDefault();
     }
 
-    // Initialize interaction
     d3.select(document.body)
       .on('mousemove.koala', onMouseMove)
       .on('touchmove.koala', onTouchMove)
       .on('touchend.koala', onTouchEnd)
       .on('touchcancel.koala', onTouchEnd);
 
-    // 彩蛋：空格键自动随机展开圆形
-    var autoInterval;
-    d3.select(document.body).on('keydown.koala', function() {
-      if (d3.event.which !== 32) return;
-      if (autoInterval) {
-        clearInterval(autoInterval);
-        autoInterval = null;
-      } else {
-        autoInterval = setInterval(function() {
-          var circle = null;
-          var gridDim = maxSize / minSize;
-          for (var attempt = 0; attempt < 50 && !circle; attempt++) {
-            var rx = Math.floor(Math.random() * gridDim);
-            var ry = Math.floor(Math.random() * gridDim);
-            var c = finestLayer(rx, ry);
-            while (c && !c.isSplitable()) c = c.parent;
-            if (c && c.isSplitable()) circle = c;
-          }
-          if (circle) {
-            circle.split();
-          } else {
-            clearInterval(autoInterval);
-            autoInterval = null;
-          }
-        }, 150);
+    // 暴露控制接口（供 easter-egg.js 等外部模块使用）
+    function splitRandom() {
+      var gridDim = maxSize / minSize;
+      for (var attempt = 0; attempt < 50; attempt++) {
+        var rx = Math.floor(Math.random() * gridDim);
+        var ry = Math.floor(Math.random() * gridDim);
+        var c = finestLayer(rx, ry);
+        while (c && !c.isSplitable()) c = c.parent;
+        if (c && c.isSplitable()) { c.split(); return true; }
       }
-      d3.event.preventDefault();
-    });
+      return false;
+    }
+    return { splitRandom: splitRandom };
   };
 })();

@@ -1,4 +1,4 @@
-"use strict"
+"use strict";
 
 /*
 * Made with love by Vadim Ogievetsky for Annie Albagli (Valentine's Day 2011)
@@ -84,11 +84,11 @@ var koala = {
     this.onSplit(this);
   }
 
-  Circle.prototype.checkIntersection = function(startPoint, endPoint) {
-    var edx = this.x - endPoint[0],
-        edy = this.y - endPoint[1],
-        sdx = this.x - startPoint[0],
-        sdy = this.y - startPoint[1],
+  Circle.prototype.checkIntersection = function(sx, sy, ex, ey) {
+    var edx = this.x - ex,
+        edy = this.y - ey,
+        sdx = this.x - sx,
+        sdy = this.y - sy,
         r2  = this.size / 2;
 
     r2 = r2 * r2; // Radius squared
@@ -153,6 +153,7 @@ var koala = {
     onEvent = onEvent || function() {};
 
     var splitableByLayer = [],
+        splitableRemaining = 0,
         splitableTotal = 0,
         nextPercent = 0;
 
@@ -160,11 +161,12 @@ var koala = {
       // manage events
       var layer = circle.layer;
       splitableByLayer[layer]--;
+      splitableRemaining--;
       if (splitableByLayer[layer] === 0) {
         onEvent('LayerClear', layer);
       }
 
-      var percent = 1 - d3.sum(splitableByLayer) / splitableTotal;
+      var percent = 1 - splitableRemaining / splitableTotal;
       if (percent >= nextPercent) {
         onEvent('PercentClear', Math.round(nextPercent * 100));
         nextPercent += 0.05;
@@ -177,7 +179,9 @@ var koala = {
       vis = d3.select(selector)
         .append("svg")
           .attr("width", maxSize)
-          .attr("height", maxSize);
+          .attr("height", maxSize)
+          .attr("viewBox", "0 0 " + maxSize + " " + maxSize)
+          .attr("preserveAspectRatio", "xMidYMid meet");
     } else {
       vis.selectAll('circle')
         .remove();
@@ -221,54 +225,41 @@ var koala = {
       currentLayer++;
       prevLayer = layer;
     }
+    splitableRemaining = splitableTotal;
 
     // Create the initial circle
     Circle.addToVis(vis, [layer(0, 0)], true);
 
     // Interaction helper functions
-    function splitableCircleAt(pos) {
-      var xi = Math.floor(pos[0] / minSize),
-          yi = Math.floor(pos[1] / minSize),
+    function splitableCircleAt(x, y) {
+      var xi = Math.floor(x / minSize),
+          yi = Math.floor(y / minSize),
           circle = finestLayer(xi, yi);
       if (!circle) return null;
       while (circle && !circle.isSplitable()) circle = circle.parent;
       return circle || null;
     }
 
-    function intervalLength(startPoint, endPoint) {
-      var dx = endPoint[0] - startPoint[0],
-          dy = endPoint[1] - startPoint[1];
-
-      return Math.sqrt(dx * dx + dy * dy);
-    }
-
-    function breakInterval(startPoint, endPoint, maxLength) {
-      var breaks = [],
-          length = intervalLength(startPoint, endPoint),
-          numSplits = Math.max(Math.ceil(length / maxLength), 1),
-          dx = (endPoint[0] - startPoint[0]) / numSplits,
-          dy = (endPoint[1] - startPoint[1]) / numSplits,
-          startX = startPoint[0],
-          startY = startPoint[1];
-
-      for (var i = 0; i <= numSplits; i++) {
-        breaks.push([startX + dx * i, startY + dy * i]);
-      }
-      return breaks;
-    }
-
     function findAndSplit(startPoint, endPoint) {
-      var breaks = breakInterval(startPoint, endPoint, 4);
-      var circleToSplit = []
+      var dx = endPoint[0] - startPoint[0],
+          dy = endPoint[1] - startPoint[1],
+          length = Math.sqrt(dx * dx + dy * dy),
+          numSplits = Math.max(Math.ceil(length / 4), 1),
+          stepX = dx / numSplits,
+          stepY = dy / numSplits,
+          spX = startPoint[0],
+          spY = startPoint[1],
+          epX, epY;
 
-      for (var i = 0; i < breaks.length - 1; i++) {
-        var sp = breaks[i],
-            ep = breaks[i+1];
-
-        var circle = splitableCircleAt(ep);
-        if (circle && circle.isSplitable() && circle.checkIntersection(sp, ep)) {
+      for (var i = 0; i < numSplits; i++) {
+        epX = spX + stepX;
+        epY = spY + stepY;
+        var circle = splitableCircleAt(epX, epY);
+        if (circle && circle.isSplitable() && circle.checkIntersection(spX, spY, epX, epY)) {
           circle.split();
         }
+        spX = epX;
+        spY = epY;
       }
     }
 
@@ -309,7 +300,7 @@ var koala = {
       var touches = d3.event.changedTouches;
       for (var touchIndex = 0; touchIndex < touches.length; touchIndex++) {
         var touch = touches.item(touchIndex);
-        prevTouchPositions[touch.identifier] = null;
+        delete prevTouchPositions[touch.identifier];
       }
       d3.event.preventDefault();
     }
@@ -320,5 +311,34 @@ var koala = {
       .on('touchmove.koala', onTouchMove)
       .on('touchend.koala', onTouchEnd)
       .on('touchcancel.koala', onTouchEnd);
+
+    // 彩蛋：空格键自动随机展开圆形
+    var autoInterval;
+    d3.select(document.body).on('keydown.koala', function() {
+      if (d3.event.which !== 32) return;
+      if (autoInterval) {
+        clearInterval(autoInterval);
+        autoInterval = null;
+      } else {
+        autoInterval = setInterval(function() {
+          var circle = null;
+          var gridDim = maxSize / minSize;
+          for (var attempt = 0; attempt < 50 && !circle; attempt++) {
+            var rx = Math.floor(Math.random() * gridDim);
+            var ry = Math.floor(Math.random() * gridDim);
+            var c = finestLayer(rx, ry);
+            while (c && !c.isSplitable()) c = c.parent;
+            if (c && c.isSplitable()) circle = c;
+          }
+          if (circle) {
+            circle.split();
+          } else {
+            clearInterval(autoInterval);
+            autoInterval = null;
+          }
+        }, 150);
+      }
+      d3.event.preventDefault();
+    });
   };
 })();
